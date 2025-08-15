@@ -25,10 +25,9 @@ if "OPENROUTER_API_KEY" in st.secrets:
 
 
 @st.cache_resource
-def initialize_components():
-    """Initialize all components (cached so they persist across reruns)"""
+def initialize_client():
+    """Initialize and test only the OpenRouter client (expensive part)"""
     try:
-        # Initialize components exactly like in your CLI demo
         client = OpenRouterClient()
 
         # Test connection
@@ -37,6 +36,17 @@ def initialize_components():
             st.error(f"❌ OpenRouter connection failed: {test_result.get('error')}")
             return None
 
+        return client
+
+    except Exception as e:
+        st.error(f"❌ Failed to initialize OpenRouter client: {str(e)}")
+        return None
+
+
+def initialize_conversation_components(client):
+    """Initialize fresh conversation components for each session"""
+    try:
+        # Create fresh components - these reset on browser refresh
         context_manager = ContextManager(client)
         tracker = ConversationTracker(base_output_dir="conversations")
 
@@ -49,14 +59,20 @@ def initialize_components():
         return conversation_manager
 
     except Exception as e:
-        st.error(f"❌ Failed to initialize components: {str(e)}")
+        st.error(f"❌ Failed to initialize conversation components: {str(e)}")
         return None
 
 
 def main():
-    # Initialize session state
+    # Get cached client (persists across reruns but not browser refresh)
+    client = initialize_client()
+    if client is None:
+        st.error("❌ Failed to initialize the OpenRouter client. Please check your API configuration.")
+        st.stop()
+
+    # Initialize fresh conversation manager for each browser session
     if "conversation_manager" not in st.session_state:
-        st.session_state.conversation_manager = initialize_components()
+        st.session_state.conversation_manager = initialize_conversation_components(client)
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -64,9 +80,9 @@ def main():
     if "session_started" not in st.session_state:
         st.session_state.session_started = False
 
-    # Check if initialization succeeded
+    # Check if conversation manager initialization succeeded
     if st.session_state.conversation_manager is None:
-        st.error("❌ Failed to initialize the travel assistant. Please check your API configuration.")
+        st.error("❌ Failed to initialize the conversation manager. Please refresh the page.")
         st.stop()
 
     # Sidebar
@@ -105,6 +121,10 @@ def main():
             st.session_state.conversation_manager.context_manager.reset_context()
             st.session_state.messages = []
             st.rerun()
+
+        # Fresh start info
+        st.markdown("---")
+        st.markdown("💡 **Tip**: Refresh browser for completely fresh start")
 
     # Main chat interface
     st.title("🌍 Peregrine - AI Travel Assistant")
