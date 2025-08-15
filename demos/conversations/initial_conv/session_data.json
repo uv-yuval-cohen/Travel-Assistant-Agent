@@ -1,0 +1,149 @@
+{
+  "session_metadata": {
+    "session_id": "conv_15-08-2025_19-29-57",
+    "start_time": "2025-08-15T19:29:57.858240",
+    "total_turns": 9,
+    "total_duration": "690.90 seconds",
+    "models_used": [
+      "deepseek/deepseek-chat-v3-0324:free"
+    ],
+    "errors_encountered": []
+  },
+  "performance_metrics": [
+    {
+      "turn": 1,
+      "timestamp": "2025-08-15T19:30:25.243033",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 2,
+      "usage": {
+        "completion_tokens": 56,
+        "prompt_tokens": 1225,
+        "total_tokens": 1281,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 2,
+      "timestamp": "2025-08-15T19:31:01.587807",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 4,
+      "usage": {
+        "completion_tokens": 68,
+        "prompt_tokens": 1569,
+        "total_tokens": 1637,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 3,
+      "timestamp": "2025-08-15T19:31:55.142188",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 6,
+      "usage": {
+        "completion_tokens": 72,
+        "prompt_tokens": 1689,
+        "total_tokens": 1761,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 4,
+      "timestamp": "2025-08-15T19:33:10.225332",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 8,
+      "usage": {
+        "completion_tokens": 84,
+        "prompt_tokens": 1832,
+        "total_tokens": 1916,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 5,
+      "timestamp": "2025-08-15T19:34:06.399070",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 10,
+      "usage": {
+        "completion_tokens": 151,
+        "prompt_tokens": 1906,
+        "total_tokens": 2057,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 6,
+      "timestamp": "2025-08-15T19:35:21.421666",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 12,
+      "usage": {
+        "completion_tokens": 182,
+        "prompt_tokens": 2113,
+        "total_tokens": 2295,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 7,
+      "timestamp": "2025-08-15T19:37:47.474524",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 14,
+      "usage": {
+        "completion_tokens": 177,
+        "prompt_tokens": 2391,
+        "total_tokens": 2568,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 8,
+      "timestamp": "2025-08-15T19:39:03.650792",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 16,
+      "usage": {
+        "completion_tokens": 593,
+        "prompt_tokens": 2721,
+        "total_tokens": 3314,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 9,
+      "timestamp": "2025-08-15T19:40:42.125603",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 18,
+      "usage": {
+        "completion_tokens": 87,
+        "prompt_tokens": 3298,
+        "total_tokens": 3385,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    }
+  ]
+}
