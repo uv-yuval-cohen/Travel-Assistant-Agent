@@ -135,12 +135,6 @@ def main():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-            # Show additional info for assistant messages
-            if message["role"] == "assistant" and "metadata" in message:
-                metadata = message["metadata"]
-                if metadata.get("model_used"):
-                    st.caption(f"🤖 Model: {metadata['model_used']}")
-
     # Chat input
     if prompt := st.chat_input("Ask me anything about travel planning..."):
         # Add user message to chat history
@@ -169,10 +163,6 @@ def main():
                         }
                     }
                     st.session_state.messages.append(assistant_message)
-
-                    # Show model info
-                    if result.get("model_used"):
-                        st.caption(f"🤖 Model: {result['model_used']}")
 
                     # Force refresh to update sidebar with new context
                     st.rerun()
