@@ -406,6 +406,9 @@ def handle_tool_aware_response(user_message, manager):
     Returns the final response content and whether tools were used.
     """
     try:
+        # Capture context before processing for tracking
+        context_before = manager.context_manager.get_context_for_prompt() if manager.context_manager else ""
+
         with st.spinner("Thinking..."):
             # Build dynamic system prompt
             dynamic_system_prompt = manager._build_dynamic_system_prompt()
@@ -426,6 +429,25 @@ def handle_tool_aware_response(user_message, manager):
         if not result["success"]:
             error_message = f"❌ {result.get('response', 'Unknown error occurred')}"
             st.error(error_message)
+
+            # Track the error manually
+            if manager.tracker:
+                response_data = {
+                    "success": False,
+                    "response": error_message,
+                    "error": result.get("error", "Unknown error"),
+                    "model_used": result.get("model_used"),
+                    "conversation_length": len(manager.conversation_history),
+                    "tool_used": False
+                }
+
+                manager.tracker.track_message_exchange(
+                    user_message=user_message,
+                    response_data=response_data,
+                    context_before=context_before,
+                    context_after=context_before  # No change on error
+                )
+
             return error_message, False
 
         initial_response = result["content"]
@@ -441,34 +463,61 @@ def handle_tool_aware_response(user_message, manager):
             if tool_info["tool_data"].get("Tool") == "Weather":
                 with st.spinner("🌤️ Checking weather forecast..."):
                     # Execute weather tool
-                    weather_data = manager._execute_weather_tool(tool_info["tool_data"])
+                    weather_result = manager._execute_weather_tool(tool_info["tool_data"])
 
-                    # Create enriched prompt for final response
-                    enriched_messages = messages_for_api + [
-                        {"role": "assistant", "content": initial_response},
-                        {"role": "system",
-                         "content": f"Tool execution result:\n{weather_data}\n\nNow provide your complete response to the user incorporating this weather information. Do not mention the tool usage - just give natural, helpful advice based on the weather data."}
-                    ]
+                    if weather_result["success"]:
+                        # Weather API succeeded
+                        weather_data = weather_result["data"]
 
-                    # Get final response with weather data
-                    final_result = manager.client.chat(enriched_messages, model_type="chat", response_type="chat")
+                        # Create enriched prompt for final response
+                        enriched_messages = messages_for_api + [
+                            {"role": "assistant", "content": initial_response},
+                            {"role": "system",
+                             "content": f"Tool execution result:\n{weather_data}\n\nNow provide your complete response to the user incorporating this weather information. Do not mention the tool usage - just give natural, helpful advice based on the weather data."}
+                        ]
 
-                    if final_result["success"]:
-                        final_response = final_result["content"]
+                        # Get final response with weather data
+                        final_result = manager.client.chat(enriched_messages, model_type="chat", response_type="chat")
 
-                        # Show weather check confirmation
-                        st.success("✅ Weather data retrieved successfully")
+                        if final_result["success"]:
+                            final_response = final_result["content"]
 
-                        display_message(final_response, "assistant")
+                            # Show success indicator for real weather data
+                            st.success("✅ Weather data retrieved and used")
 
-                        # Combine responses for history with weather indicator
-                        combined_response = tool_info[
-                                                "cleaned_response"] + "\n\n🌤️ *Weather data checked* \n\n" + final_response
+                            display_message(final_response, "assistant")
+
+                            # Combine responses for history with success indicator
+                            combined_response = tool_info[
+                                                    "cleaned_response"] + "\n\n---\n🌤️ **Weather data checked and incorporated above**\n---\n\n" + final_response
+                        else:
+                            # LLM call failed but weather data was good
+                            st.warning("⚠️ Could not process weather data")
+                            combined_response = tool_info[
+                                                    "cleaned_response"] + "\n\n---\n⚠️ **Weather data retrieved but processing failed**\n---"
                     else:
-                        # Fall back to just the cleaned response
-                        st.warning("⚠️ Weather data temporarily unavailable")
-                        combined_response = tool_info[
-                                                "cleaned_response"] + "\n\n⚠️ *Weather check attempted but data unavailable*"
+                        # Weather API failed
+                        st.error("❌ Weather data unavailable")
+
+                        # Still try to give a helpful response without weather
+                        error_message = weather_result["data"]
+                        enriched_messages = messages_for_api + [
+                            {"role": "assistant", "content": initial_response},
+                            {"role": "system",
+                             "content": f"Weather lookup failed: {error_message}\n\nProvide helpful general travel advice without specific weather information. Mention that weather data is currently unavailable."}
+                        ]
+
+                        final_result = manager.client.chat(enriched_messages, model_type="chat", response_type="chat")
+
+                        if final_result["success"]:
+                            final_response = final_result["content"]
+                            display_message(final_response, "assistant")
+                            combined_response = tool_info[
+                                                    "cleaned_response"] + "\n\n---\n❌ **Weather check failed - general advice provided**\n---\n\n" + final_response
+                        else:
+                            # Both weather and LLM failed
+                            combined_response = tool_info[
+                                                    "cleaned_response"] + "\n\n---\n❌ **Weather check failed**\n---"
             else:
                 # Unknown tool, just use cleaned response
                 combined_response = tool_info["cleaned_response"]
@@ -486,6 +535,24 @@ def handle_tool_aware_response(user_message, manager):
             # Update context manager
             if manager.context_manager:
                 manager.context_manager.update_context(manager.conversation_history)
+
+            # Track the exchange manually since we bypassed send_message
+            if manager.tracker:
+                response_data = {
+                    "success": True,
+                    "response": combined_response,
+                    "model_used": result.get("model_used"),
+                    "conversation_length": len(manager.conversation_history),
+                    "usage": result.get("usage"),
+                    "tool_used": True
+                }
+
+                manager.tracker.track_message_exchange(
+                    user_message=user_message,
+                    response_data=response_data,
+                    context_before=context_before,
+                    context_after=manager.context_manager.get_context_for_prompt() if manager.context_manager else ""
+                )
 
             return combined_response, True
 
@@ -506,11 +573,47 @@ def handle_tool_aware_response(user_message, manager):
             if manager.context_manager:
                 manager.context_manager.update_context(manager.conversation_history)
 
+            # Track the exchange manually since we bypassed send_message
+            if manager.tracker:
+                response_data = {
+                    "success": True,
+                    "response": initial_response,
+                    "model_used": result.get("model_used"),
+                    "conversation_length": len(manager.conversation_history),
+                    "usage": result.get("usage"),
+                    "tool_used": False
+                }
+
+                manager.tracker.track_message_exchange(
+                    user_message=user_message,
+                    response_data=response_data,
+                    context_before=context_before,
+                    context_after=manager.context_manager.get_context_for_prompt() if manager.context_manager else ""
+                )
+
             return initial_response, False
 
     except Exception as e:
         error_message = f"❌ An unexpected error occurred: {str(e)}"
         st.error(error_message)
+
+        # Track the exception manually
+        if manager.tracker:
+            response_data = {
+                "success": False,
+                "response": error_message,
+                "error": str(e),
+                "conversation_length": len(manager.conversation_history),
+                "tool_used": False
+            }
+
+            manager.tracker.track_message_exchange(
+                user_message=user_message,
+                response_data=response_data,
+                context_before=context_before,
+                context_after=context_before  # No change on error
+            )
+
         return error_message, False
 
 
