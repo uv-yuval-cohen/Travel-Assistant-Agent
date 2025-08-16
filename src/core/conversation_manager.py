@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Generator
 
 from ..clients.openrouter_client import OpenRouterClient
 from ..utils.config import Config
@@ -169,185 +169,245 @@ class ConversationManager:
 
         return system_prompt
 
-    def send_message(self, user_message: str, model_type: str = "chat") -> Dict[str, Any]:
+    def send_message(self, user_message: str, model_type: str = "chat") -> Generator[Dict[str, Any], None, None]:
         """
-        Send a user message to the AI model and get the assistant's response
+        Send a user message to the AI model and get the assistant's response.
+        This method is a generator that yields status updates and final results.
 
         Args:
             user_message: The user's message/question to send to the travel assistant
-            model_type: "chat" or "reasoning" (currently basic - will be enhanced in Step 2.2 with intelligent routing)
+            model_type: "chat" or "reasoning"
 
-        Returns:
-            Dict with the model's response and conversation metadata
+        Yields:
+            Dicts with status updates, partial responses, or the final response.
         """
         # Validate input
         validation_result = self._validate_input(user_message)
         if not validation_result["valid"]:
-            return {
-                "success": False,
-                "error": validation_result["error"],
-                "response": validation_result["error"],
-                "conversation_length": len(self.conversation_history)
-            }
+            yield self._handle_validation_error(validation_result)
+            return
 
         # Capture context before processing (for tracking)
-        context_before = ""
-        if self.context_manager:
-            context_before = self.context_manager.get_context_for_prompt()
+        context_before = self.context_manager.get_context_for_prompt() if self.context_manager else ""
 
         try:
-            # Build dynamic system prompt with current user context
-            dynamic_system_prompt = self._build_dynamic_system_prompt()
+            # Yield initial status
+            yield {"type": "status", "content": "Thinking..."}
 
-            # Check if the user message is already the last one in the history (retry/edit scenario)
-            is_retry_or_edit = (self.conversation_history and
-                                self.conversation_history[-1]["role"] == "user" and
-                                self.conversation_history[-1]["content"] == user_message)
-
-            # Create messages for API call, avoiding duplicate user message on retry/edit
-            messages_for_api = [{"role": "system", "content": dynamic_system_prompt}] + self.conversation_history
-            if not is_retry_or_edit:
-                messages_for_api.append({"role": "user", "content": user_message})
+            # Prepare for API Call: creates dynamic system prompt, adds messages history and checks for edit/retry mode
+            messages_for_api, is_retry_or_edit = self._prepare_api_messages(user_message)
 
             # Get initial response from model
-            result = self.client.chat(
+            initial_result = self.client.chat(
                 messages=messages_for_api,
                 model_type=model_type,
                 response_type="chat"
             )
 
-            if not result["success"]:
-                # API failed but we handled it gracefully
-                response_data = {
-                    "success": False,
-                    "error": result.get("error", "Unknown error"),
-                    "response": result["content"],  # This will be the friendly error message
-                    "model_used": result.get("model_used"),
-                    "conversation_length": len(self.conversation_history)
-                }
+            if not initial_result["success"]:
+                yield from self._handle_api_error(initial_result, user_message, context_before)
+                return
 
-                # Track failed exchange if tracker is available
-                if self.tracker:
-                    context_after = context_before  # Context didn't change on failure
-                    self.tracker.track_message_exchange(
-                        user_message=user_message,
-                        response_data=response_data,
-                        context_before=context_before,
-                        context_after=context_after
-                    )
-
-                return response_data
-
-            # Parse response for tool usage
-            initial_response = result["content"]
+            # Process Response and Handle Tools
+            initial_response = initial_result["content"]
             tool_info = self._parse_tool_usage(initial_response)
+
+            # Yield any text that comes before a tool is used
+            if tool_info["cleaned_response"]:
+                yield {"type": "interim_response", "content": tool_info["cleaned_response"]}
 
             if tool_info["has_tool"]:
                 # Execute tool and get enriched response
-                if tool_info["tool_data"].get("Tool") == "Weather":
-                    # Execute weather tool
-                    weather_data = self._execute_weather_tool(tool_info["tool_data"])
-
-                    # Create enriched prompt for final response
-                    enriched_messages = messages_for_api + [
-                        {"role": "assistant", "content": initial_response},
-                        {"role": "system",
-                         "content": f"Tool execution result:\n{weather_data}\n\nNow provide your complete response to the user incorporating this weather information. Do not mention the tool usage - just give natural, helpful advice based on the weather data."}
-                    ]
-
-                    # Get final response with weather data
-                    final_result = self.client.chat(
-                        messages=enriched_messages,
-                        model_type=model_type,
-                        response_type="chat"
-                    )
-
-                    if final_result["success"]:
-                        assistant_response = final_result["content"]
-                        model_used = final_result["model_used"]
-                        usage_info = final_result.get("usage")
-                    else:
-                        # Fall back to cleaned initial response if final call fails
-                        assistant_response = tool_info["cleaned_response"]
-                        model_used = result["model_used"]
-                        usage_info = result.get("usage")
-                        print("⚠️ Weather-enriched response failed, using initial response")
-                else:
-                    # Unknown tool, use cleaned response
-                    assistant_response = tool_info["cleaned_response"]
-                    model_used = result["model_used"]
-                    usage_info = result.get("usage")
-                    print(f"⚠️ Unknown tool requested: {tool_info['tool_data'].get('Tool')}")
+                response_data = yield from self._handle_tool_usage(
+                    tool_info=tool_info,
+                    initial_response_text=initial_response,
+                    initial_api_result=initial_result,
+                    messages_for_api=messages_for_api,
+                    model_type=model_type
+                )
             else:
-                # No tools used, use original response
-                assistant_response = initial_response
-                model_used = result["model_used"]
-                usage_info = result.get("usage")
+                # No tool was used
+                response_data = {
+                    "assistant_response": initial_response,
+                    "model_used": initial_result["model_used"],
+                    "usage_info": initial_result.get("usage")
+                }
+                yield {"type": "response", "content": initial_response}
 
             # Update conversation history (without system message)
             # Avoid duplicating user message on retry/edit
-            if not is_retry_or_edit:
-                self.conversation_history.append({"role": "user", "content": user_message})
-            self.conversation_history.append({"role": "assistant", "content": assistant_response})
-
-            # Trim history if too long
-            if len(self.conversation_history) > Config.MAX_CONVERSATION_HISTORY:
-                self.conversation_history = self.conversation_history[-Config.MAX_CONVERSATION_HISTORY:]
-
-            # Update context manager if available
-            if self.context_manager:
-                self.context_manager.update_context(self.conversation_history)
+            yield from self._update_conversation_state(
+                user_message, response_data["assistant_response"], is_retry_or_edit
+            )
 
             # Capture context after processing (for tracking)
-            context_after = ""
-            if self.context_manager:
-                context_after = self.context_manager.get_context_for_prompt()
+            context_after = self.context_manager.get_context_for_prompt() if self.context_manager else ""
 
-            # Prepare response data
-            response_data = {
-                "success": True,
-                "response": assistant_response,
-                "model_used": model_used,
-                "conversation_length": len(self.conversation_history),
-                "usage": usage_info,
-                "tool_used": tool_info["has_tool"]
-            }
+            yield from self._finalize_and_track_response(
+                response_data=response_data,
+                tool_info=tool_info,
+                user_message=user_message,
+                context_before=context_before,
+                context_after=context_after
+            )
 
-            if self.tracker:
-                self.tracker.track_message_exchange(
-                    user_message=user_message,
-                    response_data=response_data,
-                    context_before=context_before,
-                    context_after=context_after
-                )
-
-            return response_data
 
         except Exception as e:
-            # TODO: Basic error handling - will be enhanced in Step 5.1 (Comprehensive Error Handling)
-            # Future: Specific error types, better user messages, error tracking, recovery strategies
-            error_msg = f"I apologize, but I encountered an unexpected error: {str(e)}"
-            print(f"❌ Unexpected error in conversation: {str(e)}")
+            yield from self._handle_unexpected_error(e, user_message, context_before)
 
-            response_data = {
-                "success": False,
-                "error": str(e),
-                "response": error_msg,
-                "conversation_length": len(self.conversation_history)
+    # ========== HELPERS for send_message method =====================
+    def _prepare_api_messages(self, user_message: str) -> tuple[list[dict], bool]:
+        """Prepares the list of messages for the API call and checks for retry/edit."""
+
+        dynamic_system_prompt = self._build_dynamic_system_prompt()
+
+        is_retry_or_edit = (
+                self.conversation_history and
+                self.conversation_history[-1]["role"] == "user" and
+                self.conversation_history[-1]["content"] == user_message
+        )
+
+        messages = [{"role": "system", "content": dynamic_system_prompt}] + self.conversation_history
+        if not is_retry_or_edit:
+            messages.append({"role": "user", "content": user_message})
+
+        return messages, is_retry_or_edit
+
+    def _handle_validation_error(self, validation_result: dict) -> Dict:
+        """Creates the response dict for an input validation error."""
+        return {
+            "type": "error",
+            "success": False,
+            "content": validation_result["error"],
+            "conversation_length": len(self.conversation_history)
+        }
+
+    def _handle_api_error(self, result: dict, user_message: str, context_before: str) -> Generator[Dict, None, None]:
+        """Handles a failed API call, tracks it, and yields the error."""
+        error_response = {
+            "type": "error", "success": False, "content": result["content"],
+            "error": result.get("error", "Unknown error"),
+            "model_used": result.get("model_used"),
+            "conversation_length": len(self.conversation_history)
+        }
+        if self.tracker:
+            self.tracker.track_message_exchange(
+                user_message=user_message, response_data=error_response,
+                context_before=context_before, context_after=context_before
+            )
+        yield error_response
+
+    def _handle_tool_usage(self, tool_info: dict, initial_response_text: str, initial_api_result: dict,
+                           messages_for_api: list, model_type: str) -> Generator[Dict, None, Dict]:
+        """Handles the logic for executing a tool and getting an enriched response."""
+        tool_name = tool_info["tool_data"].get("Tool")
+
+        # --- Weather Tool Logic ---
+        if tool_name == "Weather":
+            yield {"type": "status", "content": "🌤️ Checking weather forecast..."}
+            weather_result = self._execute_weather_tool(tool_info["tool_data"])
+
+            if weather_result["success"]:
+                yield {"type": "tool_success", "content": "✅ Weather data retrieved"}
+                system_prompt = f"Tool execution result:\n{weather_result['data']}\n\nNow provide your complete response to the user incorporating this weather information. Do not mention the tool usage - just give natural, helpful advice based on the weather data."
+                history_marker = "\n\n---\n🌤️ **Weather data checked and incorporated above**\n---\n\n"
+            else:
+                yield {"type": "tool_error", "content": "❌ Weather data unavailable"}
+                system_prompt = f"Weather lookup failed: {weather_result['data']}\n\nProvide helpful general travel advice without specific weather information. Mention that weather data is currently unavailable."
+                history_marker = "\n\n---\n❌ **Weather check failed - general advice provided**\n---\n\n"
+
+            # Re-call LLM with tool results
+            yield {"type": "status", "content": "Interpreting weather data..."}
+            enriched_messages = messages_for_api + [
+                {"role": "assistant", "content": initial_response_text},
+                {"role": "system", "content": system_prompt}
+            ]
+            final_result = self.client.chat(enriched_messages, model_type=model_type, response_type="chat")
+
+            if final_result["success"]:
+                final_content = final_result["content"]
+                yield {"type": "response", "content": final_content}
+                combined_response = tool_info["cleaned_response"] + history_marker + final_content
+                return {
+                    "assistant_response": combined_response,
+                    "model_used": final_result["model_used"],
+                    "usage_info": final_result.get("usage")
+                }
+            else:
+                # Fallback if the second LLM call fails
+                yield {"type": "tool_error", "content": "⚠️ Could not process weather data"}
+                fallback_response = tool_info[
+                                        "cleaned_response"] + "\n\n---\n⚠️ **Weather data retrieved but processing failed**\n---"
+                return {
+                    "assistant_response": fallback_response,
+                    "model_used": initial_api_result["model_used"],
+                    "usage_info": initial_api_result.get("usage")
+                }
+
+        # --- Unknown Tool Logic ---
+        else:
+            yield {"type": "tool_error", "content": f"⚠️ Unknown tool: {tool_name or 'Unknown'}"}
+            print(f"⚠️ Unknown tool requested: {tool_name}")
+            return {
+                "assistant_response": tool_info["cleaned_response"],
+                "model_used": initial_api_result["model_used"],
+                "usage_info": initial_api_result.get("usage")
             }
 
-            # Track error if tracker is available
-            if self.tracker:
-                context_after = context_before  # Context didn't change on error
-                self.tracker.track_message_exchange(
-                    user_message=user_message,
-                    response_data=response_data,
-                    context_before=context_before,
-                    context_after=context_after
-                )
+    def _update_conversation_state(self, user_message: str, assistant_response: str, is_retry_or_edit: bool):
+        """Updates and trims conversation history and context manager."""
+        if not is_retry_or_edit:
+            self.conversation_history.append({"role": "user", "content": user_message})
+        self.conversation_history.append({"role": "assistant", "content": assistant_response})
 
-            return response_data
+        if len(self.conversation_history) > Config.MAX_CONVERSATION_HISTORY:
+            self.conversation_history = self.conversation_history[-Config.MAX_CONVERSATION_HISTORY:]
 
+        if self.context_manager:
+            yield {"type": "context_update"}
+            self.context_manager.update_context(self.conversation_history)
+
+    def _finalize_and_track_response(self, response_data: dict, tool_info: dict, user_message: str, context_before: str,
+                                     context_after: str) -> Generator[Dict, None, None]:
+        """Builds the final response dict, tracks the exchange, and yields it."""
+        final_response = {
+            "type": "final_response",
+            "success": True,
+            "content": response_data["assistant_response"],
+            "model_used": response_data["model_used"],
+            "conversation_length": len(self.conversation_history),
+            "usage": response_data["usage_info"],
+            "tool_used": tool_info["has_tool"]
+        }
+
+        if self.tracker:
+            tracking_data = final_response.copy()
+            tracking_data["response"] = tracking_data["content"]
+            self.tracker.track_message_exchange(
+                user_message=user_message,
+                response_data=tracking_data,
+                context_before=context_before,
+                context_after=context_after
+            )
+
+        yield final_response
+
+    def _handle_unexpected_error(self, e: Exception, user_message: str, context_before: str) -> Generator[
+        Dict, None, None]:
+        """Handles any unexpected exception, tracks it, and yields the error."""
+        error_msg = f"I apologize, but I encountered an unexpected error: {str(e)}"
+        print(f"❌ Unexpected error in conversation: {str(e)}")
+        error_response = {
+            "type": "error", "success": False, "content": error_msg,
+            "error": str(e), "conversation_length": len(self.conversation_history)
+        }
+        if self.tracker:
+            self.tracker.track_message_exchange(
+                user_message=user_message, response_data=error_response,
+                context_before=context_before, context_after=context_before
+            )
+        yield error_response
+    # ============= end of send_message HELPERS =====================
     def _validate_input(self, user_message: str) -> Dict[str, Any]:
         """
         Validate user input
