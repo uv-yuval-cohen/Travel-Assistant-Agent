@@ -419,7 +419,7 @@ class ConversationManager:
             "tool_data": tool_data
         }
 
-    def _execute_weather_tool(self, tool_data: Dict[str, str]) -> str:
+    def _execute_weather_tool(self, tool_data: Dict[str, str]) -> Dict[str, Any]:
         """
         Execute weather tool request using real weather API
 
@@ -427,7 +427,7 @@ class ConversationManager:
             tool_data: Parsed tool parameters
 
         Returns:
-            Weather information string
+            Dict with success status and weather information
         """
         location = tool_data.get('Location', '').strip()
         start_date = tool_data.get('Start_Date', '').strip()
@@ -435,20 +435,32 @@ class ConversationManager:
 
         # Validate required parameters
         if not location:
-            return "Weather lookup failed: No location specified."
+            return {
+                "success": False,
+                "data": "Weather lookup failed: No location specified."
+            }
 
         if not start_date or not end_date:
-            return "Weather lookup failed: Travel dates not specified."
+            return {
+                "success": False,
+                "data": "Weather lookup failed: Travel dates not specified."
+            }
 
         # Call weather API
         weather_result = self.weather_client.get_forecast(location, start_date, end_date)
 
         if weather_result["success"]:
             print(f"🌤️ Weather data retrieved for {location}")
-            return weather_result["data"]
+            return {
+                "success": True,
+                "data": weather_result["data"]
+            }
         else:
             print(f"⚠️ Weather API error: {weather_result['error']}")
-            return weather_result["data"]  # This contains the user-friendly error message
+            return {
+                "success": False,
+                "data": weather_result["data"]  # This contains the user-friendly error message
+            }
 
     def get_conversation_statistics(self) -> Dict[str, Any]:
         """
