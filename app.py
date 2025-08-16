@@ -39,6 +39,8 @@ st.markdown("""
 # Override the config with Streamlit secrets
 if "OPENROUTER_API_KEY" in st.secrets:
     Config.OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
+if "OPENWEATHER_API_KEY" in st.secrets:
+    Config.OPENWEATHER_API_KEY = st.secrets["OPENWEATHER_API_KEY"]
 
 
 def is_hebrew_text(text):
