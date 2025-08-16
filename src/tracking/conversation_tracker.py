@@ -26,6 +26,7 @@ class ConversationTracker:
         self.context_progression = []
         self.performance_metrics = []
         self.session_metadata = {}
+        self.step_back_events = []  # Track retry/edit events separately
 
         print("✅ ConversationTracker initialized")
 
@@ -130,6 +131,52 @@ class ConversationTracker:
         # Write files after each exchange (lightweight, non-blocking)
         self._write_files()
 
+    def track_step_back_event(self, event_type: str, target_index: int, original_content: str = "",
+                              new_content: str = ""):
+        """
+        Track when user steps back in conversation (retry/edit events)
+
+        Args:
+            event_type: "retry" or "edit"
+            target_index: Index of message being retried/edited
+            original_content: Original message content (for edits)
+            new_content: New message content (for edits)
+        """
+        if not self.session_id:
+            return
+
+        timestamp = datetime.now()
+
+        # Store step-back event separately (not as a conversation turn)
+        event_data = {
+            "timestamp": timestamp.isoformat(),
+            "event_type": event_type,
+            "target_index": target_index,
+            "original_content": original_content,
+            "new_content": new_content
+        }
+
+        self.step_back_events.append(event_data)
+
+        # Also track in context progression
+        self.context_progression.append({
+            "turn": len(self.conversation_transcript) + 1,
+            "timestamp": timestamp.isoformat(),
+            "context_before": "",
+            "context_after": "",
+            "context_changed": False,
+            "step_back_event": {
+                "type": event_type,
+                "target_index": target_index,
+                "description": f"User {event_type}ed message at index {target_index}"
+            }
+        })
+
+        # Write files after tracking the event
+        self._write_files()
+
+        print(f"📝 Tracked {event_type} event for message {target_index}")
+
     def _write_files(self):
         """Write all tracking data to files in appropriate formats"""
         try:
@@ -149,51 +196,115 @@ class ConversationTracker:
             print(f"⚠️ Error writing tracking files: {str(e)}")
 
     def _write_transcript_md(self):
-        """Write conversation transcript in markdown format"""
+        """Write conversation transcript in markdown format with step-back events"""
         content = f"# Travel Assistant Conversation\n\n"
         content += f"**Session ID:** {self.session_id}\n"
         content += f"**Started:** {self.session_start_time.strftime('%d-%m-%Y %H:%M:%S')}\n"
-        content += f"**Total Turns:** {len(self.conversation_transcript)}\n\n"
-        content += "---\n\n"
+        content += f"**Total Turns:** {len(self.conversation_transcript)}\n"
+        if self.step_back_events:
+            content += f"**Step-back Events:** {len(self.step_back_events)} (retries/edits)\n"
+        content += "\n---\n\n"
 
-        for exchange in self.conversation_transcript:
-            timestamp = datetime.fromisoformat(exchange["timestamp"]).strftime("%H:%M:%S")
-            content += f"## Turn {exchange['turn']} ({timestamp})\n\n"
+        # Create a timeline combining conversation turns and step-back events
+        timeline = []
 
-            content += f"**🧑 User:**\n{exchange['user_message']}\n\n"
+        # Add conversation turns
+        for i, exchange in enumerate(self.conversation_transcript):
+            timeline.append({
+                "type": "conversation",
+                "timestamp": exchange["timestamp"],
+                "data": exchange,
+                "turn_number": exchange["turn"]
+            })
 
-            if exchange["success"]:
-                content += f"**🤖 Assistant:**\n{exchange['assistant_response']}\n\n"
-            else:
-                content += f"**❌ Assistant (Error):**\n{exchange['assistant_response']}\n\n"
+        # Add step-back events
+        for event in self.step_back_events:
+            timeline.append({
+                "type": "step_back",
+                "timestamp": event["timestamp"],
+                "data": event
+            })
 
-            content += "---\n\n"
+        # Sort by timestamp
+        timeline.sort(key=lambda x: x["timestamp"])
+
+        # Write timeline
+        for item in timeline:
+            if item["type"] == "conversation":
+                exchange = item["data"]
+                timestamp = datetime.fromisoformat(exchange["timestamp"]).strftime("%H:%M:%S")
+                content += f"## Turn {exchange['turn']} ({timestamp})\n\n"
+
+                content += f"**🧑 User:**\n{exchange['user_message']}\n\n"
+
+                if exchange["success"]:
+                    content += f"**🤖 Assistant:**\n{exchange['assistant_response']}\n\n"
+                else:
+                    content += f"**❌ Assistant (Error):**\n{exchange['assistant_response']}\n\n"
+
+                content += "---\n\n"
+
+            elif item["type"] == "step_back":
+                event = item["data"]
+                timestamp = datetime.fromisoformat(event["timestamp"]).strftime("%H:%M:%S")
+
+                if event["event_type"] == "retry":
+                    content += f"### 🔄 RETRY EVENT ({timestamp})\n\n"
+                    content += f"User retried the assistant response at message {event['target_index']} and got a new response below.\n\n"
+                    content += "---\n\n"
+                elif event["event_type"] == "edit":
+                    content += f"### ✏️ EDIT EVENT ({timestamp})\n\n"
+                    content += f"User edited message at index {event['target_index']}:\n"
+                    if event["original_content"]:
+                        content += f"- **Original:** {event['original_content'][:100]}...\n"
+                    if event["new_content"]:
+                        content += f"- **Edited to:** {event['new_content'][:100]}...\n"
+                    content += "\nNew conversation continues below.\n\n"
+                    content += "---\n\n"
 
         # Write to file
         with open(self.session_dir / "transcript.md", "w", encoding="utf-8") as f:
             f.write(content)
 
     def _write_context_evolution_md(self):
-        """Write context evolution in markdown format"""
+        """Write context evolution in markdown format with step-back awareness"""
         content = f"# Context Evolution\n\n"
         content += f"**Session ID:** {self.session_id}\n"
-        content += f"**Total Context Updates:** {len(self.context_progression)}\n\n"
+        content += f"**Total Context Updates:** {len([c for c in self.context_progression if not c.get('step_back_event')])}\n"
+        content += f"**Step-back Events:** {len([c for c in self.context_progression if c.get('step_back_event')])}\n\n"
         content += "---\n\n"
 
         for i, context_data in enumerate(self.context_progression):
-            content += f"## Turn {context_data['turn']}\n\n"
+            # Check if this is a step-back event
+            if context_data.get("step_back_event"):
+                event = context_data["step_back_event"]
+                timestamp = datetime.fromisoformat(context_data["timestamp"]).strftime("%H:%M:%S")
 
-            if context_data["context_changed"]:
-                content += "**🔄 Context Updated**\n\n"
+                if event["type"] == "retry":
+                    content += f"### 🔄 RETRY EVENT ({timestamp})\n\n"
+                    content += f"**Action:** {event['description']}\n"
+                    content += f"**Effect:** Context restored to previous state before regenerating response\n\n"
+                elif event["type"] == "edit":
+                    content += f"### ✏️ EDIT EVENT ({timestamp})\n\n"
+                    content += f"**Action:** {event['description']}\n"
+                    content += f"**Effect:** Context restored to state before the edited message, will be updated with new content\n\n"
+
+                content += "---\n\n"
             else:
-                content += "**📋 Context Unchanged**\n\n"
+                # Regular context update
+                content += f"## Turn {context_data['turn']}\n\n"
 
-            if context_data["context_after"]:
-                content += f"**Current Context:**\n```\n{context_data['context_after']}\n```\n\n"
-            else:
-                content += "**Current Context:** *(No context yet)*\n\n"
+                if context_data["context_changed"]:
+                    content += "**🔄 Context Updated**\n\n"
+                else:
+                    content += "**📋 Context Unchanged**\n\n"
 
-            content += "---\n\n"
+                if context_data["context_after"]:
+                    content += f"**Current Context:**\n```\n{context_data['context_after']}\n```\n\n"
+                else:
+                    content += "**Current Context:** *(No context yet)*\n\n"
+
+                content += "---\n\n"
 
         # Write to file
         with open(self.session_dir / "context_evolution.md", "w", encoding="utf-8") as f:

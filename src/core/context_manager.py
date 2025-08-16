@@ -1,8 +1,10 @@
+from collections import deque
 from typing import List, Dict, Any, Optional
 
-from ..models.openrouter_client import OpenRouterClient
+from ..clients.openrouter_client import OpenRouterClient
 from ..utils.config import Config
-
+from datetime import datetime
+import calendar
 
 class ContextManager:
     """Manages user insights using flexible text-based storage"""
@@ -15,12 +17,61 @@ class ContextManager:
             client: OpenRouter client instance (dependency injection)
         """
         self.client = client
-        self.user_context = ""  # Flexible storage: Everything we know about the user
+        self.user_context = self._create_initial_context()
+        self.context_snapshots = deque(maxlen=5)  # Store last few context states for undo functionality
 
         # TODO: Will be enhanced in Step 2.2 - currently uses basic chat model for context analysis
         # Future: Dedicated context analysis model, more sophisticated prompting strategies
 
         print("✅ Context Manager initialized with dependency injection")
+
+    def _create_initial_context(self) -> str:
+        """
+        Create initial context with current date and seasonal information
+
+        Returns:
+            Initial context string with date information
+        """
+        now = datetime.now()
+
+        # Determine season in Northern Hemisphere (most common for travel)
+        month = now.month
+        if month in [12, 1, 2]:
+            season = "Winter"
+        elif month in [3, 4, 5]:
+            season = "Spring"
+        elif month in [6, 7, 8]:
+            season = "Summer"
+        else:  # 9, 10, 11
+            season = "Autumn/Fall"
+
+        # Get day name and time context
+        day_name = calendar.day_name[now.weekday()]
+        hour = now.hour
+
+        # Determine time of day for greetings
+        if 5 <= hour < 12:
+            time_of_day = "Morning"
+            greeting_context = "good morning"
+        elif 12 <= hour < 17:
+            time_of_day = "Afternoon"
+            greeting_context = "good afternoon"
+        elif 17 <= hour < 22:
+            time_of_day = "Evening"
+            greeting_context = "good evening"
+        else:
+            time_of_day = "Night"
+            greeting_context = "good evening" if hour >= 22 else "good morning"
+
+        initial_context = f"""Current Date & Time Context:
+    - Today is {day_name}, {now.strftime('%B %d, %Y')} at {now.strftime('%H:%M')} (Israel time)
+    - Current season: {season} (Northern Hemisphere)
+    - Time of day: {time_of_day} - appropriate greeting would be "{greeting_context}"
+    - Time of year considerations: This affects weather patterns, tourist seasons, activity availability, and pricing for most destinations
+
+    This is a new conversation with a user seeking travel assistance."""
+
+        return initial_context
 
     def update_context(self, conversation_history: List[Dict[str, str]]):
         """
@@ -48,7 +99,7 @@ class ContextManager:
 **Maintain a Comprehensive Profile:** A useful profile includes multiple layers of information. Ensure the updated context captures:
 
 * **Conversation Purpose:** What is the user's general goal? (e.g., the user is just looking for a short QA session, or maybe looking for a complete guided thorough assistant to plan his next trip, or maybe the user is actually currently during his trip and wants some suggestions, or maybe it's more about budget, or maybe it's an emergency that needs a very careful reply...and many more).  
-* **Explicit Details (The 'What'):** Concrete facts explicitly mentioned by the user (e.g., destinations, dates, budget figures, number of travelers, accommodation types, specific activities).  
+* **Explicit Details (The 'What'):** Concrete facts explicitly mentioned by the user (e.g., destinations, dates, budget figures, number of travelers, accommodation types, specific activities, what language the user speaks, his current location).  
 * **Inferred Insights (The 'How' and 'Who'):** Implicit information derived from the conversation (e.g., user's communication style, travel experience level, personality traits like 'decisive' or 'hesitant', preferences like 'prefers luxury' or 'seeks adventure').
 
 ### **Update Logic**
@@ -69,6 +120,7 @@ The context will be updated after every message. It is important you **do not dr
 * You **MUST** output **ONLY** the complete, updated context text.  
 * **DO NOT** include any preambles, apologies, or explanations like "Here is the updated context:". Your output will be used directly as a system input, and any extra text will cause a failure.  
 * Maintain a clear, organized structure, ideally preserving the format of the provided CURRENT USER CONTEXT for consistency.
+* For the 'Current Date & Time Context' - You can make that much more concise as its mostly relevant at the beginning.
 
 ### **Guiding Principles**
 
@@ -95,6 +147,7 @@ That is all. Please now output the updated context according to these instructio
 
             # Only update if we got a reasonable response
             if updated_context and len(updated_context.strip()) > 10:
+                self.save_context_snapshot()
                 self.user_context = updated_context.strip()
                 print("🧠 User context updated")
             else:
@@ -136,7 +189,7 @@ That is all. Please now output the updated context according to these instructio
 
     def reset_context(self):
         """Reset user context"""
-        self.user_context = ""
+        self.user_context = self._create_initial_context()
         print("🔄 User context reset")
 
     def get_context_summary(self) -> Dict[str, Any]:
@@ -149,7 +202,7 @@ That is all. Please now output the updated context according to these instructio
         return {
             "has_user_context": bool(self.user_context),
             "context_length": len(self.user_context) if self.user_context else 0,
-            "context_preview": self.user_context[:200] + "..." if len(self.user_context) > 200 else self.user_context
+            "context_preview": self.user_context[:300] + "..." if len(self.user_context) > 300 else self.user_context
         }
 
     def set_context_manually(self, context: str):
@@ -164,3 +217,28 @@ That is all. Please now output the updated context according to these instructio
 
         self.user_context = context.strip()
         print(f"✅ Context set manually: {context[:50]}...")
+
+    # HELPERS for handling conversation branching and snapshots
+
+    def save_context_snapshot(self):
+        """Save current context state as a snapshot"""
+        self.context_snapshots.append(self.user_context) # deque keeps only most recent 5
+
+    def restore_context_snapshot(self, steps_back: int = 1):
+        """Restore context to a previous state"""
+        if len(self.context_snapshots) >= steps_back:
+            # Pop items from the end to go back in time
+            restored_context = None
+            for _ in range(steps_back):
+                restored_context = self.context_snapshots.pop()
+
+            self.user_context = restored_context
+            print(f"🔄 Context restored {steps_back} step(s) back.")
+            return True
+        else:
+            print(f"⚠️ Cannot restore {steps_back} steps back, only {len(self.context_snapshots)} snapshots available")
+            return False
+
+    def get_available_snapshots(self) -> int:
+        """Get number of available context snapshots for undo"""
+        return len(self.context_snapshots)

@@ -16,15 +16,19 @@ class Config:
     # Model Configuration
     MODELS = {
         "chat_primary": "deepseek/deepseek-chat-v3-0324:free",
-        "chat_backup": "meta-llama/llama-3.3-70b-instruct:free",
+        "chat_backup": "deepseek/deepseek-chat-v3-0324:free",
         "reasoning_primary": "deepseek/deepseek-r1-0528:free",
         "reasoning_backup": "qwen/qwen3-235b-a22b:free",
-        "context_primary": "deepseek/deepseek-chat-v3-0324:free", # currently similar to chat models, but may change
+        "context_primary": "deepseek/deepseek-chat-v3-0324:free", # currently similar to chat clients, but may change
         "context_backup": "meta-llama/llama-3.3-70b-instruct:free"
     }
 
+    # Weather API Configuration
+    OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
+    OPENWEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5"
+
     # Rate Limits & Timeouts
-    REQUEST_TIMEOUT = 8  # seconds
+    REQUEST_TIMEOUT = 3  # seconds
     MAX_RETRIES = 3
     RETRY_DELAY = 1  # seconds between retries
 
@@ -63,6 +67,10 @@ class Config:
         # Validate timeout settings
         if cls.REQUEST_TIMEOUT <= 0:
             issues.append("REQUEST_TIMEOUT must be positive")
+
+        # Check weather API key
+        if not cls.OPENWEATHER_API_KEY:
+            issues.append("OPENWEATHER_API_KEY not found - weather features will be disabled")
 
         return {
             "valid": len(issues) == 0,
