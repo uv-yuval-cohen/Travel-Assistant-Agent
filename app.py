@@ -39,6 +39,7 @@ st.markdown("""
 # Override the config with Streamlit secrets
 if "OPENROUTER_API_KEY" in st.secrets:
     Config.OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
+
 if "OPENWEATHER_API_KEY" in st.secrets:
     Config.OPENWEATHER_API_KEY = st.secrets["OPENWEATHER_API_KEY"]
 
@@ -50,15 +51,10 @@ def is_hebrew_text(text):
     """
     if not text:
         return False
-
-    # Hebrew Unicode range: U+0590 to U+05FF
     hebrew_chars = re.findall(r'[\u0590-\u05FF]', text)
-    # Count only letters and numbers for percentage calculation
     total_chars = re.findall(r'[a-zA-Z0-9\u0590-\u05FF]', text)
-
     if not total_chars:
         return False
-
     hebrew_percentage = len(hebrew_chars) / len(total_chars)
     return hebrew_percentage > 0.2
 
@@ -67,9 +63,7 @@ def display_message(content, role):
     """
     Display a chat message with RTL support for Hebrew text.
     """
-    # Escape dollar signs for correct Markdown rendering
     content = content.replace('$', '\$')
-
     if is_hebrew_text(content):
         st.markdown(f'<div class="rtl-message">{content}</div>', unsafe_allow_html=True)
     else:
@@ -78,38 +72,30 @@ def display_message(content, role):
 
 @st.cache_resource
 def initialize_client():
-    """Initialize and test only the OpenRouter client (expensive part)"""
+    """Initialize and cache the OpenRouter client."""
     try:
         client = OpenRouterClient()
-
-        # Test connection
         test_result = client.test_connection()
         if test_result["status"] != "success":
             st.error(f"❌ OpenRouter connection failed: {test_result.get('error')}")
             return None
-
         return client
-
     except Exception as e:
         st.error(f"❌ Failed to initialize OpenRouter client: {str(e)}")
         return None
 
 
 def initialize_conversation_components(client):
-    """Initialize fresh conversation components for each session"""
+    """Initialize fresh conversation components for each session."""
     try:
-        # Create fresh components - these reset on browser refresh
         context_manager = ContextManager(client)
         tracker = ConversationTracker(base_output_dir="conversations")
-
         conversation_manager = ConversationManager(
             client=client,
             context_manager=context_manager,
             tracker=tracker
         )
-
         return conversation_manager
-
     except Exception as e:
         st.error(f"❌ Failed to initialize conversation components: {str(e)}")
         return None
@@ -120,33 +106,118 @@ def step_back_to(index: int, manager):
     Resets the conversation state to a specific point in the history.
     Returns True if successful, False if context restore failed.
     """
-    # Calculate how many messages to remove from the UI
     num_ui_messages_to_remove = len(st.session_state.messages) - index
-
     if num_ui_messages_to_remove <= 0:
         return True
 
-    # Calculate how many context snapshots to restore
     num_turns_to_remove = math.ceil(num_ui_messages_to_remove / 2)
 
-    # Check if we can restore context before proceeding
     if num_turns_to_remove > 0:
         if not manager.context_manager.restore_context_snapshot(num_turns_to_remove):
-            st.error(f"❌ Cannot edit/retry this far back.")
+            st.error("❌ Cannot edit/retry this far back.")
             return False
 
-    # If context restore succeeded, proceed with message changes
-    # Truncate the UI message list
     st.session_state.messages = st.session_state.messages[:index]
-
-    # Recalculate the backend history to match the new UI history
-    new_backend_history = []
-    for msg in st.session_state.messages:
-        if msg["role"] in ("user", "assistant"):
-            new_backend_history.append({"role": msg["role"], "content": msg["content"]})
-
+    new_backend_history = [
+        {"role": msg["role"], "content": msg["content"]}
+        for msg in st.session_state.messages
+        if msg["role"] in ("user", "assistant")
+    ]
     manager.conversation_history = new_backend_history
     return True
+
+
+def process_and_display_response(user_message, manager):
+    """
+    Processes a user message in multiple stages:
+    1. Shows a "Thinking..." spinner until the initial response is available.
+    2. Processes tool calls and the final response.
+    3. Shows an "Updating context..." spinner for the final background task.
+    """
+    with st.chat_message("assistant"):
+        response_placeholder = st.empty()
+        status_placeholder = st.empty()
+        full_response = ""
+        final_content = ""
+        tool_used = False
+        tool_status = None
+
+        # Get the generator object once at the start
+        response_generator = manager.send_message(user_message)
+
+        # === STAGE 1: Initial response phase with spinner ===
+        # The spinner will only be active while this block is running.
+        with st.spinner("Thinking..."):
+            for update in response_generator:
+                # If we get an interim response, it means a tool is being used.
+                # We display it and then exit the spinner block.
+                if update["type"] == "interim_response":
+                    full_response = update["content"]
+                    response_placeholder.markdown(full_response)
+                    break  # Exit the loop AND the spinner context
+
+                # If we get a final response directly, no tool was used.
+                # We display it and exit the spinner block.
+                elif update["type"] == "response":
+                    full_response = update["content"]
+                    response_placeholder.markdown(full_response)
+                    break  # Exit the loop AND the spinner context
+
+                # If an error happens early, show it and exit.
+                elif update["type"] == "error":
+                    full_response = update["content"]
+                    response_placeholder.error(full_response)
+                    break
+
+        # === STAGE 2: Tool, final response, and context update phase ===
+        # The spinner is now gone. We continue iterating over the SAME generator.
+        for update in response_generator:
+            if update["type"] == "tool_success":
+                tool_used = True
+                tool_status = "success"
+                status_placeholder.success(update["content"])
+
+            elif update["type"] == "tool_error":
+                tool_used = True
+                tool_status = "error"
+                status_placeholder.error(update["content"])
+
+            # This is the final part of the response after a tool has run.
+            elif update["type"] == "response":
+                final_content = update["content"]
+
+                # Logic to correctly combine interim and final responses
+                if full_response.strip() not in final_content:
+                    if tool_status == "success":
+                        tool_indicator = "🌤️ *Weather data incorporated*"
+                    else:  # tool_status == "error"
+                        tool_indicator = "⚠️ *Weather data unavailable - general advice provided*"
+                    full_response = full_response + "\n\n" + tool_indicator + "\n\n" + final_content
+                else:
+                    full_response = final_content
+
+                response_placeholder.markdown(full_response)
+                # Clear the status message (e.g., "Checking weather...")
+                status_placeholder.empty()
+
+            elif update["type"] == "error":
+                status_placeholder.error(update["content"])
+                break
+
+            # --- NEW PART ---
+            # This block catches the signal from your backend and shows the spinner.
+            elif update["type"] == "context_update":
+                with st.spinner("Updating context..."):
+                    # This loop exhausts the rest of the generator,
+                    # triggering the slow backend operation while the spinner is active.
+                    for _ in response_generator:
+                        pass
+                # The process is now finished, so we exit the loop.
+                break
+
+    # Add the final, complete response to the session state and rerun
+    st.session_state.messages.append({"role": "assistant", "content": full_response})
+    st.rerun()
 
 
 def main():
@@ -180,7 +251,7 @@ def main():
             st.image("peregrine_logo.png", width=120)
             st.title("Peregrine")
             st.markdown("*Your AI Travel Concierge*")
-        except:
+        except Exception:
             # Fallback if logo file not found
             st.title("🌍 Peregrine")
             st.markdown("*Your AI Travel Concierge*")
@@ -334,20 +405,8 @@ def main():
         with st.chat_message("user"):
             display_message(edit_message, "user")
 
-        # Get assistant response with tool handling
-        with st.chat_message("assistant"):
-            # Handle tool-aware response
-            assistant_response, tool_used = handle_tool_aware_response(edit_message, manager)
-
-            # Add to session state
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": assistant_response,
-                "metadata": {
-                    "tool_used": tool_used
-                }
-            })
-            st.rerun()
+        # Process response using the generator
+        process_and_display_response(edit_message, manager)
 
     # Handle pending retry (just regenerate response, user message already there)
     if st.session_state.get("pending_retry"):
@@ -355,20 +414,8 @@ def main():
         del st.session_state.pending_retry
 
         # Don't add user message - it's already there after step_back_to()
-        # Just get assistant response directly
-        with st.chat_message("assistant"):
-            # Handle tool-aware response
-            assistant_response, tool_used = handle_tool_aware_response(retry_message, manager)
-
-            # Add to session state
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": assistant_response,
-                "metadata": {
-                    "tool_used": tool_used
-                }
-            })
-            st.rerun()
+        # Just process the response directly
+        process_and_display_response(retry_message, manager)
 
     # Chat input (only show if not in edit mode)
     if not st.session_state.get("edit_mode", False) and not st.session_state.get("pending_retry"):
@@ -380,243 +427,12 @@ def main():
             with st.chat_message("user"):
                 display_message(prompt, "user")
 
-            # Get assistant response with tool handling
-            with st.chat_message("assistant"):
-                # Handle tool-aware response
-                assistant_response, tool_used = handle_tool_aware_response(prompt, manager)
-
-                # Add to session state
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": assistant_response,
-                    "metadata": {
-                        "tool_used": tool_used
-                    }
-                })
-
-                # Force refresh to update sidebar
-                st.rerun()
+            # Process response using the generator
+            process_and_display_response(prompt, manager)
 
     # Footer
     st.markdown("---")
     st.markdown("*Built with advanced conversation management and context awareness*")
-
-
-def handle_tool_aware_response(user_message, manager):
-    """
-    Handle assistant response with tool awareness and proper loading states.
-    Returns the final response content and whether tools were used.
-    """
-    try:
-        # Capture context before processing for tracking
-        context_before = manager.context_manager.get_context_for_prompt() if manager.context_manager else ""
-
-        with st.spinner("Thinking..."):
-            # Build dynamic system prompt
-            dynamic_system_prompt = manager._build_dynamic_system_prompt()
-
-            # Check for retry/edit scenario
-            is_retry_or_edit = (manager.conversation_history and
-                                manager.conversation_history[-1]["role"] == "user" and
-                                manager.conversation_history[-1]["content"] == user_message)
-
-            # Create messages for API call
-            messages_for_api = [{"role": "system", "content": dynamic_system_prompt}] + manager.conversation_history
-            if not is_retry_or_edit:
-                messages_for_api.append({"role": "user", "content": user_message})
-
-            # Get initial response
-            result = manager.client.chat(messages_for_api, model_type="chat", response_type="chat")
-
-        if not result["success"]:
-            error_message = f"❌ {result.get('response', 'Unknown error occurred')}"
-            st.error(error_message)
-
-            # Track the error manually
-            if manager.tracker:
-                response_data = {
-                    "success": False,
-                    "response": error_message,
-                    "error": result.get("error", "Unknown error"),
-                    "model_used": result.get("model_used"),
-                    "conversation_length": len(manager.conversation_history),
-                    "tool_used": False
-                }
-
-                manager.tracker.track_message_exchange(
-                    user_message=user_message,
-                    response_data=response_data,
-                    context_before=context_before,
-                    context_after=context_before  # No change on error
-                )
-
-            return error_message, False
-
-        initial_response = result["content"]
-
-        # Parse for tool usage
-        tool_info = manager._parse_tool_usage(initial_response)
-
-        if tool_info["has_tool"]:
-            # Show the user-facing part first
-            display_message(tool_info["cleaned_response"], "assistant")
-
-            # Handle tool execution with loading
-            if tool_info["tool_data"].get("Tool") == "Weather":
-                with st.spinner("🌤️ Checking weather forecast..."):
-                    # Execute weather tool
-                    weather_result = manager._execute_weather_tool(tool_info["tool_data"])
-
-                    if weather_result["success"]:
-                        # Weather API succeeded
-                        weather_data = weather_result["data"]
-
-                        # Create enriched prompt for final response
-                        enriched_messages = messages_for_api + [
-                            {"role": "assistant", "content": initial_response},
-                            {"role": "system",
-                             "content": f"Tool execution result:\n{weather_data}\n\nNow provide your complete response to the user incorporating this weather information. Do not mention the tool usage - just give natural, helpful advice based on the weather data."}
-                        ]
-
-                        # Get final response with weather data
-                        final_result = manager.client.chat(enriched_messages, model_type="chat", response_type="chat")
-
-                        if final_result["success"]:
-                            final_response = final_result["content"]
-
-                            # Show success indicator for real weather data
-                            st.success("✅ Weather data retrieved and used")
-
-                            display_message(final_response, "assistant")
-
-                            # Combine responses for history with success indicator
-                            combined_response = tool_info[
-                                                    "cleaned_response"] + "\n\n---\n🌤️ **Weather data checked and incorporated above**\n---\n\n" + final_response
-                        else:
-                            # LLM call failed but weather data was good
-                            st.warning("⚠️ Could not process weather data")
-                            combined_response = tool_info[
-                                                    "cleaned_response"] + "\n\n---\n⚠️ **Weather data retrieved but processing failed**\n---"
-                    else:
-                        # Weather API failed
-                        st.error("❌ Weather data unavailable")
-
-                        # Still try to give a helpful response without weather
-                        error_message = weather_result["data"]
-                        enriched_messages = messages_for_api + [
-                            {"role": "assistant", "content": initial_response},
-                            {"role": "system",
-                             "content": f"Weather lookup failed: {error_message}\n\nProvide helpful general travel advice without specific weather information. Mention that weather data is currently unavailable."}
-                        ]
-
-                        final_result = manager.client.chat(enriched_messages, model_type="chat", response_type="chat")
-
-                        if final_result["success"]:
-                            final_response = final_result["content"]
-                            display_message(final_response, "assistant")
-                            combined_response = tool_info[
-                                                    "cleaned_response"] + "\n\n---\n❌ **Weather check failed - general advice provided**\n---\n\n" + final_response
-                        else:
-                            # Both weather and LLM failed
-                            combined_response = tool_info[
-                                                    "cleaned_response"] + "\n\n---\n❌ **Weather check failed**\n---"
-            else:
-                # Unknown tool, just use cleaned response
-                combined_response = tool_info["cleaned_response"]
-                st.warning(f"Unknown tool requested: {tool_info['tool_data'].get('Tool', 'Unknown')}")
-
-            # Update conversation history manually
-            if not is_retry_or_edit:
-                manager.conversation_history.append({"role": "user", "content": user_message})
-            manager.conversation_history.append({"role": "assistant", "content": combined_response})
-
-            # Trim history if too long
-            if len(manager.conversation_history) > Config.MAX_CONVERSATION_HISTORY:
-                manager.conversation_history = manager.conversation_history[-Config.MAX_CONVERSATION_HISTORY:]
-
-            # Update context manager
-            if manager.context_manager:
-                manager.context_manager.update_context(manager.conversation_history)
-
-            # Track the exchange manually since we bypassed send_message
-            if manager.tracker:
-                response_data = {
-                    "success": True,
-                    "response": combined_response,
-                    "model_used": result.get("model_used"),
-                    "conversation_length": len(manager.conversation_history),
-                    "usage": result.get("usage"),
-                    "tool_used": True
-                }
-
-                manager.tracker.track_message_exchange(
-                    user_message=user_message,
-                    response_data=response_data,
-                    context_before=context_before,
-                    context_after=manager.context_manager.get_context_for_prompt() if manager.context_manager else ""
-                )
-
-            return combined_response, True
-
-        else:
-            # No tools, show regular response
-            display_message(initial_response, "assistant")
-
-            # Update conversation history manually
-            if not is_retry_or_edit:
-                manager.conversation_history.append({"role": "user", "content": user_message})
-            manager.conversation_history.append({"role": "assistant", "content": initial_response})
-
-            # Trim history if too long
-            if len(manager.conversation_history) > Config.MAX_CONVERSATION_HISTORY:
-                manager.conversation_history = manager.conversation_history[-Config.MAX_CONVERSATION_HISTORY:]
-
-            # Update context manager
-            if manager.context_manager:
-                manager.context_manager.update_context(manager.conversation_history)
-
-            # Track the exchange manually since we bypassed send_message
-            if manager.tracker:
-                response_data = {
-                    "success": True,
-                    "response": initial_response,
-                    "model_used": result.get("model_used"),
-                    "conversation_length": len(manager.conversation_history),
-                    "usage": result.get("usage"),
-                    "tool_used": False
-                }
-
-                manager.tracker.track_message_exchange(
-                    user_message=user_message,
-                    response_data=response_data,
-                    context_before=context_before,
-                    context_after=manager.context_manager.get_context_for_prompt() if manager.context_manager else ""
-                )
-
-            return initial_response, False
-
-    except Exception as e:
-        error_message = f"❌ An unexpected error occurred: {str(e)}"
-        st.error(error_message)
-
-        # Track the exception manually
-        if manager.tracker:
-            response_data = {
-                "success": False,
-                "response": error_message,
-                "error": str(e),
-                "conversation_length": len(manager.conversation_history),
-                "tool_used": False
-            }
-
-            manager.tracker.track_message_exchange(
-                user_message=user_message,
-                response_data=response_data,
-                context_before=context_before,
-                context_after=context_before  # No change on error
-            )
-
-        return error_message, False
 
 
 if __name__ == "__main__":
