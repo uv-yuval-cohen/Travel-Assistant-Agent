@@ -15,9 +15,9 @@ class Config:
 
     # Model Configuration
     MODELS = {
-        "chat_primary": "deepseek/deepseek-chat-v3-0324:free",
+        "chat_primary": "meta-llama/llama-3.3-70b-instruct:free",
         "chat_backup": "deepseek/deepseek-chat-v3-0324:free",
-        "reasoning_primary": "deepseek/deepseek-r1-0528:free",
+        "reasoning_primary": "deepseek/deepseek-r1:free",
         "reasoning_backup": "qwen/qwen3-235b-a22b:free",
         "context_primary": "deepseek/deepseek-chat-v3-0324:free", # currently similar to chat clients, but may change
         "context_backup": "meta-llama/llama-3.3-70b-instruct:free"
@@ -39,7 +39,7 @@ class Config:
     MAX_CONVERSATION_HISTORY = 25  # number of turns to remember
     MAX_TOKENS = {
         "chat": 800,  # Normal responses
-        "reasoning": 2000,  # Detailed itineraries
+        "reasoning": 4000,  # Detailed itineraries
         "simple": 300  # Quick answers
     }
 
