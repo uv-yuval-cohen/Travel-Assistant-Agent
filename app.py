@@ -166,11 +166,14 @@ def process_and_display_response(user_message, manager):
         # The "Thinking..." spinner is now finished.
         # We continue iterating over the SAME generator from where we left off.
         tool_spinner_active = False
+        current_tool_name = None  # Add this line
         for update in response_generator:
             if update["type"] == "status":
                 # 2. Start the tool operation spinner.
                 tool_spinner_active = True
-                status_placeholder.info(f"⏳ {update['content']}") # Show the initial status
+                current_tool_name = update.get('tool_name', 'Tool')  # Add this line
+                print(current_tool_name) #print for debugging
+                status_placeholder.info(f"⏳ {update['content']}")  # Show the initial status
 
             elif update["type"] == "tool_success" and tool_spinner_active:
                 # 3. Show "Got the weather data" while the spinner is conceptually still running.
@@ -180,11 +183,18 @@ def process_and_display_response(user_message, manager):
                 status_placeholder.error(update['content'])
                 tool_spinner_active = False # Stop the process on tool error
 
+
             elif update["type"] == "response":
-                # 4. Give the final answer with the weather data.
-                if tool_spinner_active: # This means we had an interim response
-                     tool_indicator = "🌤️ *Weather data incorporated*"
-                     full_response += "\n\n" + tool_indicator + "\n\n" + update["content"]
+                # 4. Give the final answer with the tool data.
+                if tool_spinner_active:  # This means we had an interim response
+                    # Dynamic tool indicator based on which tool was used
+                    if current_tool_name == "Weather":
+                        tool_indicator = "🌤️ *Weather data incorporated*"
+                    elif current_tool_name == "Planning":
+                        tool_indicator = "📋 *Detailed plan created*"
+                    else:
+                        tool_indicator = f"✅ *{current_tool_name} data incorporated*"
+                    full_response += "\n\n" + tool_indicator + "\n\n" + update["content"]
                 else:
                      full_response = update["content"]
 
