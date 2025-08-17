@@ -28,8 +28,8 @@ class Config:
     OPENWEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5"
 
     # Rate Limits & Timeouts
-    REQUEST_TIMEOUT = 3  # seconds
-    MAX_RETRIES = 3
+    REQUEST_TIMEOUT = 7  # seconds
+    MAX_RETRIES = 2
     RETRY_DELAY = 1  # seconds between retries
 
     # OpenRouter Rate Limits (free tier)
