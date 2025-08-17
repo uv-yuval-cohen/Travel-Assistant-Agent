@@ -61,7 +61,7 @@ class ContextManager:
             greeting_context = "good evening"
         else:
             time_of_day = "Night"
-            greeting_context = "good evening" if hour >= 22 else "good morning"
+            greeting_context = "good night"
 
         initial_context = f"""Current Date & Time Context:
     - Today is {day_name}, {now.strftime('%B %d, %Y')} at {now.strftime('%H:%M')} (Israel time)
