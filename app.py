@@ -168,8 +168,7 @@ def process_and_display_response(user_message, manager):
         tool_spinner_active = False
         for update in response_generator:
             if update["type"] == "status":
-                # 2. Start the "Getting weather data..." spinner.
-                # This is the main spinner for the entire tool operation.
+                # 2. Start the tool operation spinner.
                 tool_spinner_active = True
                 status_placeholder.info(f"⏳ {update['content']}") # Show the initial status
 
@@ -183,7 +182,7 @@ def process_and_display_response(user_message, manager):
 
             elif update["type"] == "response":
                 # 4. Give the final answer with the weather data.
-                if full_response: # This means we had an interim response
+                if tool_spinner_active: # This means we had an interim response
                      tool_indicator = "🌤️ *Weather data incorporated*"
                      full_response += "\n\n" + tool_indicator + "\n\n" + update["content"]
                 else:
@@ -192,8 +191,7 @@ def process_and_display_response(user_message, manager):
                 response_placeholder.markdown(full_response)
                 status_placeholder.empty() # Clear all status messages/spinners
                 tool_spinner_active = False
-                # We break here because the main response is done. Only context update is left.
-
+                # <<< THE BUG WAS HERE: The 'break' statement was removed from this spot >>>
 
             elif update["type"] == "context_update":
                 # 5. Start the "Updating context..." spinner.
@@ -201,8 +199,8 @@ def process_and_display_response(user_message, manager):
                     # Exhaust the rest of the generator to perform the background update.
                     for _ in response_generator:
                         pass
-
-
+                # The process is now fully complete.
+                break
 
     # Add the final, complete response to the session state for history and rerun.
     if full_response:
