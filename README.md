@@ -14,47 +14,6 @@ Experience Phileas directly in your browser with no API keys or installation nee
 
 > **Note**: For local development or CLI usage, you'll need your own API keys (see setup instructions below).
 
-## ✨ Key Features
-
-### 🎯 **Conversation-First Design**
-- **Natural Dialogue Flow**: Implements advanced conversation patterns that feel human and helpful
-- **Context Awareness**: Maintains user preferences and trip details across the entire conversation
-- **Progressive Engagement**: Guides users from uncertainty to concrete plans through intelligent questioning
-
-### 🛠️ **Advanced Tool Integration**
-- **Weather Integration**: Real-time weather forecasts via OpenWeatherMap API
-- **Deep Planning Tool**: Uses reasoning models for comprehensive itinerary generation
-- **Smart Tool Selection**: Automatically determines when to use external data vs. LLM knowledge
-
-### 🧠 **Sophisticated Prompt Engineering**
-- **Chain of Thought Planning**: Multi-step reasoning process for complex travel plans
-- **Dynamic System Prompts**: Context-aware prompts that adapt to user needs
-- **Feasibility-First Approach**: Ensures all suggestions are realistic and actionable
-
-### 💬 **Enhanced User Experience**
-- **Edit & Retry**: Users can edit messages or regenerate responses
-- **Multi-Language Support**: Including Hebrew with RTL text support
-- **Real-Time Streaming**: Generator-based responses with status updates
-- **Session Tracking**: Comprehensive conversation analytics and transcripts
-
-## 🤖 AI Models & Capabilities
-
-Phileas leverages multiple state-of-the-art language models for different conversation needs:
-
-### **Primary Models**
-- **Chat & Conversation**: `deepseek/deepseek-chat-v3-0324` - Fast, natural dialogue
-- **Deep Planning**: `deepseek/deepseek-r1` - Advanced reasoning for detailed itineraries
-- **Context Analysis**: `deepseek/deepseek-chat-v3-0324` - User preference understanding
-
-### **Backup Models** (Automatic Fallback)
-- **Chat Backup**: `meta-llama/llama-3.3-70b-instruct`
-- **Planning Backup**: `qwen/qwen3-235b-a22b`
-
-### **Model Selection Strategy**
-- **Smart Routing**: Automatically selects the best model for each task
-- **Graceful Fallbacks**: Switches to backup models if primary models are unavailable
-- **Cost Optimization**: Uses free-tier models without compromising quality
-
 ## 🏗️ Architecture Overview
 
 ```
@@ -76,13 +35,40 @@ Phileas leverages multiple state-of-the-art language models for different conver
     │  Context  │    │   Weather   │    │  OpenRouter  │
     │  Manager  │    │   Client    │    │    Client    │
     └───────────┘    └─────────────┘    └──────────────┘
-          │                 │                    │
+          │                │                    │
     ┌─────▼─────┐    ┌─────▼─────┐       ┌──────▼──────┐
     │    LLM    │    │OpenWeather│       │ DeepSeek /  │
     │  Context  │    │    API    │       │ Llama /     │
     │ Analysis  │    └───────────┘       │ Qwen Models │
     └───────────┘                        └─────────────┘
 ```
+
+### 📂 Example Conversations
+
+See the `Demos/` folder for comprehensive conversation examples showcasing:
+- Budget travel planning with constraint handling
+- Multi-destination trip coordination
+- Weather-aware activity recommendations
+- Context evolution and user preference learning
+- Tool integration demonstrations
+
+## 🤖 AI Models & Capabilities
+
+Phileas leverages multiple state-of-the-art language models for different conversation needs:
+
+### **Primary Models**
+- **Chat & Conversation**: `deepseek/deepseek-chat-v3-0324` - Fast, natural dialogue
+- **Deep Planning**: `deepseek/deepseek-r1` - Advanced reasoning for detailed itineraries
+- **Context Analysis**: `deepseek/deepseek-chat-v3-0324` - User preference understanding
+
+### **Backup Models** (Automatic Fallback)
+- **Chat Backup**: `meta-llama/llama-3.3-70b-instruct`
+- **Planning Backup**: `qwen/qwen3-235b-a22b`
+
+### **Model Selection Strategy**
+- **Smart Routing**: Automatically selects the best model for each task
+- **Graceful Fallbacks**: Switches to backup models if primary models are unavailable
+- **Cost Optimization**: Uses free-tier models without compromising quality
 
 #### Installation
 
@@ -139,16 +125,6 @@ python cli_run.py --no-tracking
 python cli_run.py --session my_tokyo_trip
 ```
 
-
-### 📂 Example Conversations
-
-See the `Demos/` folder for comprehensive conversation examples showcasing:
-- Budget travel planning with constraint handling
-- Multi-destination trip coordination
-- Weather-aware activity recommendations
-- Context evolution and user preference learning
-- Tool integration demonstrations
-
 ## 🔧 Configuration
 
 ### Response Types
@@ -194,6 +170,28 @@ Tool: Deep_Planning
 Prompt: Create a 5-day Tokyo itinerary for a vegetarian traveler on a $1500 budget
 $!$TOOL_USE_END$!$
 ```
+## ✨ Key Features
+
+### 🎯 **Conversation-First Design**
+- **Natural Dialogue Flow**: Implements advanced conversation patterns that feel human and helpful
+- **Context Awareness**: Maintains user preferences and trip details across the entire conversation
+- **Progressive Engagement**: Guides users from uncertainty to concrete plans through intelligent questioning
+
+### 🛠️ **Advanced Tool Integration**
+- **Weather Integration**: Real-time weather forecasts via OpenWeatherMap API
+- **Deep Planning Tool**: Uses reasoning models for comprehensive itinerary generation
+- **Smart Tool Selection**: Automatically determines when to use external data vs. LLM knowledge
+
+### 🧠 **Sophisticated Prompt Engineering**
+- **Chain of Thought Planning**: Multi-step reasoning process for complex travel plans
+- **Dynamic System Prompts**: Context-aware prompts that adapt to user needs
+- **Feasibility-First Approach**: Ensures all suggestions are realistic and actionable
+
+### 💬 **Enhanced User Experience**
+- **Edit & Retry**: Users can edit messages or regenerate responses
+- **Multi-Language Support**: Including Hebrew with RTL text support
+- **Real-Time Streaming**: Generator-based responses with status updates
+- **Session Tracking**: Comprehensive conversation analytics and transcripts
 
 ### Conversation Tracking
 Comprehensive session tracking with multiple output formats:
@@ -258,11 +256,3 @@ python -c "from src.utils.config import Config; Config.display_config()"
 4. **Rate Limits**: Free tier constraints may affect response times
 
 
-### Code Structure
-```
-src/
-├── clients/          # API integrations
-├── core/            # Main conversation logic
-├── tracking/        # Session and analytics
-└── utils/          # Configuration and helpers
-```
