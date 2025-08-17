@@ -15,7 +15,7 @@ from src.utils.config import Config
 
 # Configure Streamlit page
 st.set_page_config(
-    page_title="🌍 Peregrine - AI Travel Assistant",
+    page_title="🌍 Phileas - AI Travel Assistant",
     page_icon="🌍",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -246,12 +246,12 @@ def main():
     with st.sidebar:
         # Logo and branding
         try:
-            st.image("peregrine_logo.png", width=120)
-            st.title("Peregrine")
+            st.image("philease_logo.png")
+            st.title("Phileas")
             st.markdown("*Your AI Travel Concierge*")
         except Exception:
             # Fallback if logo file not found
-            st.title("🌍 Peregrine")
+            st.title("🌍 Phileas")
             st.markdown("*Your AI Travel Concierge*")
 
         # Start tracking session on first run
@@ -292,7 +292,7 @@ def main():
         st.markdown("💡 **Tip**: Refresh browser for completely fresh start")
 
     # Main chat interface
-    st.title("🌍 Peregrine - AI Travel Assistant")
+    st.title("🌍 Phileas - AI Travel Assistant")
     st.markdown("*Your expert travel concierge, ready to help plan your perfect trip*")
 
     # Handle edit mode display
