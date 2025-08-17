@@ -1,0 +1,75 @@
+{
+  "session_metadata": {
+    "session_id": "conv_18-08-2025_00-16-05",
+    "start_time": "2025-08-18T00:16:05.627633",
+    "total_turns": 4,
+    "total_duration": "429.50 seconds",
+    "models_used": [
+      "deepseek/deepseek-r1:free",
+      "deepseek/deepseek-chat-v3-0324:free"
+    ],
+    "errors_encountered": []
+  },
+  "performance_metrics": [
+    {
+      "turn": 1,
+      "timestamp": "2025-08-18T00:17:42.166946",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 2,
+      "usage": {
+        "completion_tokens": 146,
+        "prompt_tokens": 3903,
+        "total_tokens": 4049,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 2,
+      "timestamp": "2025-08-18T00:20:09.450157",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 4,
+      "usage": {
+        "completion_tokens": 264,
+        "prompt_tokens": 4523,
+        "total_tokens": 4787,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 3,
+      "timestamp": "2025-08-18T00:21:27.700372",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 6,
+      "usage": {
+        "completion_tokens": 265,
+        "prompt_tokens": 5128,
+        "total_tokens": 5393,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 4,
+      "timestamp": "2025-08-18T00:23:15.122483",
+      "model_used": "deepseek/deepseek-r1:free",
+      "success": true,
+      "conversation_length": 8,
+      "usage": {
+        "completion_tokens": 314,
+        "prompt_tokens": 5668,
+        "total_tokens": 5982,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    }
+  ]
+}

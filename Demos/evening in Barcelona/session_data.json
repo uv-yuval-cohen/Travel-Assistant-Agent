@@ -1,0 +1,90 @@
+{
+  "session_metadata": {
+    "session_id": "conv_17-08-2025_23-34-15",
+    "start_time": "2025-08-17T23:34:15.939705",
+    "total_turns": 5,
+    "total_duration": "575.17 seconds",
+    "models_used": [
+      "deepseek/deepseek-chat-v3-0324:free",
+      "deepseek/deepseek-r1:free"
+    ],
+    "errors_encountered": []
+  },
+  "performance_metrics": [
+    {
+      "turn": 1,
+      "timestamp": "2025-08-17T23:35:12.032631",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 2,
+      "usage": {
+        "completion_tokens": 163,
+        "prompt_tokens": 5050,
+        "total_tokens": 5213,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 2,
+      "timestamp": "2025-08-17T23:39:31.578558",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 4,
+      "usage": {
+        "completion_tokens": 104,
+        "prompt_tokens": 4053,
+        "total_tokens": 4157,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 3,
+      "timestamp": "2025-08-17T23:40:06.418051",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 6,
+      "usage": {
+        "completion_tokens": 85,
+        "prompt_tokens": 4211,
+        "total_tokens": 4296,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 4,
+      "timestamp": "2025-08-17T23:41:03.305796",
+      "model_used": "deepseek/deepseek-chat-v3-0324:free",
+      "success": true,
+      "conversation_length": 8,
+      "usage": {
+        "completion_tokens": 113,
+        "prompt_tokens": 4361,
+        "total_tokens": 4474,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    },
+    {
+      "turn": 5,
+      "timestamp": "2025-08-17T23:43:51.110039",
+      "model_used": "deepseek/deepseek-r1:free",
+      "success": true,
+      "conversation_length": 10,
+      "usage": {
+        "completion_tokens": 186,
+        "prompt_tokens": 4542,
+        "total_tokens": 4728,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": null
+      },
+      "error": null
+    }
+  ]
+}
