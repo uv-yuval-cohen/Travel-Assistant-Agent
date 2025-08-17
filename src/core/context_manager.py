@@ -202,7 +202,7 @@ That is all. Please now output the updated context according to these instructio
         return {
             "has_user_context": bool(self.user_context),
             "context_length": len(self.user_context) if self.user_context else 0,
-            "context_preview": self.user_context[:300] + "..." if len(self.user_context) > 300 else self.user_context
+            "context_preview": self.user_context[:500] + "..." if len(self.user_context) > 500 else self.user_context
         }
 
     def set_context_manually(self, context: str):

@@ -108,11 +108,12 @@ class ConversationManager:
             $!$TOOL_USE_END$!$"
             
             **Important Notes:**
+            - You can only check the weather for up to 6 days from today. If user ask for later date, don't use the tool! Explain your limitation and provide short approximation based on average. Your reply should be very short.
             - Only use when weather information would genuinely improve your advice
             - Always explain to the user that you're checking the weather
             - Use specific city names and countries when possible
             - If dates aren't specified, ask the user for their travel dates first
-            - You can use the tool multiple times in a conversation if needed for different locations/dates
+            - You can use the tool multiple times in a conversation if needed for different locations/dates. Don't use it more than once for the same location.
         </Weather_Tool>
     </Tool_Usage>
     
@@ -308,7 +309,7 @@ class ConversationManager:
             weather_result = self._execute_weather_tool(tool_info["tool_data"])
 
             if weather_result["success"]:
-                yield {"type": "tool_success", "content": "✅ Weather data retrieved"}
+                yield {"type": "tool_success", "content": " Weather data retrieved"}
                 system_prompt = f"Tool execution result:\n{weather_result['data']}\n\nNow provide your complete response to the user incorporating this weather information. Do not mention the tool usage - just give natural, helpful advice based on the weather data."
                 history_marker = "\n\n---\n🌤️ **Weather data checked and incorporated above**\n---\n\n"
             else:
