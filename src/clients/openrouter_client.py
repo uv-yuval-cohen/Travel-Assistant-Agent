@@ -184,45 +184,36 @@ class OpenRouterClient:
             Config.MODELS["reasoning_backup"]
         ]
 
-    # TODO I think this method can be deleted
-    def chat_with_history(self,
-                          user_message: str,
-                          conversation_history: List[Dict[str, str]],
-                          model_type: str = "chat") -> Dict[str, Any]:
-        """
-        Chat with conversation history context
+    def test_reasoning_model(self, simple_prompt: str = "Create a simple 2-day Paris itinerary.") -> Dict[str, Any]:
+        """Test the reasoning model with a simple prompt"""
+        print(f"🧪 Testing reasoning model with prompt: {simple_prompt}")
 
-        Args:
-            user_message: New user message
-            conversation_history: Previous messages
-            model_type: "chat" or "reasoning"
+        simple_messages = [
+            {"role": "user", "content": simple_prompt}
+        ]
 
-        Returns:
-            Dict with response and updated history
-        """
-        # Add system message if not present
-        if not conversation_history or conversation_history[0]["role"] != "system":
-            system_msg = {"role": "system", "content": DEFAULT_SYSTEM_PROMPT}
-            messages = [system_msg] + conversation_history
-        else:
-            messages = conversation_history.copy()
+        try:
+            model_name = Config.get_model("reasoning", backup=False)
+            print(f"🤖 Testing model: {model_name}")
 
-        # Add new user message
-        messages.append({"role": "user", "content": user_message})
+            response = self._make_request(simple_messages, model_name, 1000)
 
-        # Limit history length
-        if len(messages) > Config.MAX_CONVERSATION_HISTORY:
-            # Keep system message + recent messages
-            system_msg = messages[0] if messages[0]["role"] == "system" else None
-            recent_messages = messages[-(Config.MAX_CONVERSATION_HISTORY - 1):]
-            messages = ([system_msg] if system_msg else []) + recent_messages
+            content = response.choices[0].message.content
+            print(f"📥 Raw response content length: {len(content) if content else 0}")
+            print(f"📥 Raw response preview: {content[:200] if content else 'EMPTY CONTENT'}")
 
-        # Get response
-        result = self.chat(messages, model_type)
+            return {
+                "success": True,
+                "content": content,
+                "model_used": model_name,
+                "content_length": len(content) if content else 0,
+                "is_empty": not bool(content and content.strip())
+            }
 
-        if result["success"]:
-            # Add assistant response to history
-            messages.append({"role": "assistant", "content": result["content"]})
-            result["updated_history"] = messages
-
-        return result
+        except Exception as e:
+            print(f"❌ Reasoning model test failed: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "model_used": model_name
+            }

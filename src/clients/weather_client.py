@@ -58,7 +58,7 @@ class WeatherClient:
                 location_name, start_date, end_date,
                 current_weather, forecast_weather
             )
-            # print(formatted_data) for debugging
+            print(formatted_data) #for debugging
 
             return {
                 "success": True,
