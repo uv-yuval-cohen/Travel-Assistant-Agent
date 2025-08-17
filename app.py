@@ -129,95 +129,85 @@ def step_back_to(index: int, manager):
 
 def process_and_display_response(user_message, manager):
     """
-    Processes a user message in multiple stages:
-    1. Shows a "Thinking..." spinner until the initial response is available.
-    2. Processes tool calls and the final response.
-    3. Shows an "Updating context..." spinner for the final background task.
+    Processes a user message with a clear, step-by-step visual flow for tool usage.
     """
     with st.chat_message("assistant"):
         response_placeholder = st.empty()
         status_placeholder = st.empty()
         full_response = ""
-        final_content = ""
-        tool_used = False
-        tool_status = None
 
-        # Get the generator object once at the start
+        # Get the generator object
         response_generator = manager.send_message(user_message)
 
-        # === STAGE 1: Initial response phase with spinner ===
-        # The spinner will only be active while this block is running.
+        # 1. Start with the "Thinking..." spinner.
         with st.spinner("Thinking..."):
+            # This loop will run until the first message is ready or a tool is needed.
             for update in response_generator:
-                # If we get an interim response, it means a tool is being used.
-                # We display it and then exit the spinner block.
                 if update["type"] == "interim_response":
+                    # The first message before a tool is used.
                     full_response = update["content"]
                     response_placeholder.markdown(full_response)
-                    break  # Exit the loop AND the spinner context
+                    # Break the "Thinking..." spinner and move to the next stage.
+                    break
 
-                # If we get a final response directly, no tool was used.
-                # We display it and exit the spinner block.
                 elif update["type"] == "response":
+                    # This is a direct response without any tools.
                     full_response = update["content"]
                     response_placeholder.markdown(full_response)
-                    break  # Exit the loop AND the spinner context
+                    # Break the "Thinking..." spinner. The process will continue to the context update.
+                    break
 
-                # If an error happens early, show it and exit.
                 elif update["type"] == "error":
                     full_response = update["content"]
                     response_placeholder.error(full_response)
-                    break
+                    # Stop the process on error.
+                    return
 
-        # === STAGE 2: Tool, final response, and context update phase ===
-        # The spinner is now gone. We continue iterating over the SAME generator.
+        # The "Thinking..." spinner is now finished.
+        # We continue iterating over the SAME generator from where we left off.
+        tool_spinner_active = False
         for update in response_generator:
-            if update["type"] == "tool_success":
-                tool_used = True
-                tool_status = "success"
-                status_placeholder.success(update["content"])
+            if update["type"] == "status":
+                # 2. Start the "Getting weather data..." spinner.
+                # This is the main spinner for the entire tool operation.
+                tool_spinner_active = True
+                status_placeholder.info(f"⏳ {update['content']}") # Show the initial status
+
+            elif update["type"] == "tool_success" and tool_spinner_active:
+                # 3. Show "Got the weather data" while the spinner is conceptually still running.
+                status_placeholder.success(update['content']) # Briefly show the success message
 
             elif update["type"] == "tool_error":
-                tool_used = True
-                tool_status = "error"
-                status_placeholder.error(update["content"])
+                status_placeholder.error(update['content'])
+                tool_spinner_active = False # Stop the process on tool error
 
-            # This is the final part of the response after a tool has run.
             elif update["type"] == "response":
-                final_content = update["content"]
-
-                # Logic to correctly combine interim and final responses
-                if full_response.strip() not in final_content:
-                    if tool_status == "success":
-                        tool_indicator = "🌤️ *Weather data incorporated*"
-                    else:  # tool_status == "error"
-                        tool_indicator = "⚠️ *Weather data unavailable - general advice provided*"
-                    full_response = full_response + "\n\n" + tool_indicator + "\n\n" + final_content
+                # 4. Give the final answer with the weather data.
+                if full_response: # This means we had an interim response
+                     tool_indicator = "🌤️ *Weather data incorporated*"
+                     full_response += "\n\n" + tool_indicator + "\n\n" + update["content"]
                 else:
-                    full_response = final_content
+                     full_response = update["content"]
 
                 response_placeholder.markdown(full_response)
-                # Clear the status message (e.g., "Checking weather...")
-                status_placeholder.empty()
+                status_placeholder.empty() # Clear all status messages/spinners
+                tool_spinner_active = False
+                # We break here because the main response is done. Only context update is left.
 
-            elif update["type"] == "error":
-                status_placeholder.error(update["content"])
-                break
 
-            # --- NEW PART ---
-            # This block catches the signal from your backend and shows the spinner.
             elif update["type"] == "context_update":
+                # 5. Start the "Updating context..." spinner.
                 with st.spinner("Updating context..."):
-                    # This loop exhausts the rest of the generator,
-                    # triggering the slow backend operation while the spinner is active.
+                    # Exhaust the rest of the generator to perform the background update.
                     for _ in response_generator:
                         pass
-                # The process is now finished, so we exit the loop.
-                break
 
-    # Add the final, complete response to the session state and rerun
-    st.session_state.messages.append({"role": "assistant", "content": full_response})
-    st.rerun()
+
+
+    # Add the final, complete response to the session state for history and rerun.
+    if full_response:
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
+        st.rerun()
 
 
 def main():
