@@ -58,7 +58,7 @@ class WeatherClient:
                 location_name, start_date, end_date,
                 current_weather, forecast_weather
             )
-            print(formatted_data)
+            # print(formatted_data) for debugging
 
             return {
                 "success": True,
@@ -243,9 +243,20 @@ class WeatherClient:
                 else:
                     report += f"- Mostly dry conditions expected\n"
 
+            # Forecast Limitation Note
+            last_forecast_date = sorted(daily_forecasts.keys())[-1]
+            if last_forecast_date < end_dt.date():
+                report += "\n---\n"
+                report += f"**Note:** Please be aware that the forecast is limited to the next 5 days. "
+                report += f"Data for dates beyond {last_forecast_date.strftime('%B %d')} could not be provided."
+
         else:
-            report += "Detailed daily forecast: Available for next 5 days only from today.\n"
-            report += "For longer-range planning, check closer to your travel dates.\n"
+            # This block runs only if the user's dates were completely outside the 5-day window.
+            report += "Weather Forecast Notice:\n"
+            report += f"- I can only retrieve detailed weather forecasts for the next 5 days.\n"
+            report += f"- Since your requested dates are further in the future, a specific forecast is not yet available.\n\n"
+            report += "Recommendation:\n"
+            report += "Please check again closer to your departure date for an accurate forecast. For now, you could search for historical weather averages for that destination and time of year for general planning."
 
         return report
 
