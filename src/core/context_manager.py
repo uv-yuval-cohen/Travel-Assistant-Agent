@@ -20,9 +20,6 @@ class ContextManager:
         self.user_context = self._create_initial_context()
         self.context_snapshots = deque(maxlen=5)  # Store last few context states for undo functionality
 
-        # TODO: Will be enhanced in Step 2.2 - currently uses basic chat model for context analysis
-        # Future: Dedicated context analysis model, more sophisticated prompting strategies
-
         print("✅ Context Manager initialized with dependency injection")
 
     def _create_initial_context(self) -> str:
