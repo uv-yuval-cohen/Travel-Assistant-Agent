@@ -558,9 +558,6 @@ class ConversationManager:
                 "error": "Your message is too long. Please keep it under 4000 characters."
             }
 
-        # TODO: Real content validation will be handled via prompt engineering in Step 4.4
-        # Current validation is just basic safety - advanced content filtering will be prompt-based
-
         return {"valid": True}
 
     def _parse_tool_usage(self, response: str) -> Dict[str, Any]:
