@@ -139,7 +139,7 @@ def process_and_display_response(user_message, manager):
         # Get the generator object
         response_generator = manager.send_message(user_message)
 
-        # 1. Start with the "Thinking..." spinner.
+        # Start with the "Thinking..." spinner.
         with st.spinner("Thinking..."):
             # This loop will run until the first message is ready or a tool is needed.
             for update in response_generator:
@@ -163,20 +163,20 @@ def process_and_display_response(user_message, manager):
                     # Stop the process on error.
                     return
 
-        # The "Thinking..." spinner is now finished.
+        
         # We continue iterating over the SAME generator from where we left off.
         tool_spinner_active = False
-        current_tool_name = None  # Add this line
+        current_tool_name = None
         for update in response_generator:
             if update["type"] == "status":
-                # 2. Start the tool operation spinner.
+                # Start the tool operation spinner.
                 tool_spinner_active = True
-                current_tool_name = update.get('tool_name', 'Tool')  # Add this line
+                current_tool_name = update.get('tool_name', 'Tool')
                 print(current_tool_name) #print for debugging
                 status_placeholder.info(f"⏳ {update['content']}")  # Show the initial status
 
             elif update["type"] == "tool_success" and tool_spinner_active:
-                # 3. Show "Got the weather data" while the spinner is conceptually still running.
+                # Show "Got the weather data" while the spinner is conceptually still running.
                 status_placeholder.success(update['content']) # Briefly show the success message
 
             elif update["type"] == "tool_error":
@@ -185,7 +185,7 @@ def process_and_display_response(user_message, manager):
 
 
             elif update["type"] == "response":
-                # 4. Give the final answer with the tool data.
+                # Give the final answer with the tool data.
                 if tool_spinner_active:  # This means we had an interim response
                     # Dynamic tool indicator based on which tool was used
                     if current_tool_name == "Weather":
@@ -201,10 +201,9 @@ def process_and_display_response(user_message, manager):
                 response_placeholder.markdown(full_response)
                 status_placeholder.empty() # Clear all status messages/spinners
                 tool_spinner_active = False
-                # <<< THE BUG WAS HERE: The 'break' statement was removed from this spot >>>
 
             elif update["type"] == "context_update":
-                # 5. Start the "Updating context..." spinner.
+                # Start the "Updating context..." spinner.
                 with st.spinner("Updating context..."):
                     # Exhaust the rest of the generator to perform the background update.
                     for _ in response_generator:
