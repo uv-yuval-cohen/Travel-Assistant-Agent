@@ -282,7 +282,7 @@ class ConversationManager:
 
             # Update conversation history (without system message)
             # Avoid duplicating user message on retry/edit
-            yield from self._update_conversation_state(
+            yield from self._update_conversation_context(
                 user_message, response_data["assistant_response"], is_retry_or_edit
             )
 
@@ -396,8 +396,9 @@ class ConversationManager:
                     final_content = planner_result["data"]
                     yield {"type": "response", "content": final_content}
 
+                    full_content = planner_result.get("full_output", final_content)
                     history_marker = "\n\n---\n🧠 **Detailed plan generated using reasoning model**\n---\n\n"
-                    combined_response = tool_info["cleaned_response"] + history_marker + final_content
+                    combined_response = tool_info["cleaned_response"] + history_marker + full_content
 
                     return {
                         "assistant_response": combined_response,
@@ -437,7 +438,7 @@ class ConversationManager:
 
             # Prepare system prompt based on success
             if all_tools_successful:
-                system_prompt = f"{combined_weather_data}\nNow provide your complete response to the user incorporating all this weather information. Do not mention the tool usage - just give natural, helpful advice based on the weather data."
+                system_prompt = f"{combined_weather_data}\nHere are the weather results for your earlier requests. Now please complete your previous response."
                 history_marker = f"\n\n---\n🌤️ **Weather data checked for {len(all_tool_results)} location(s)**\n---\n\n"
             else:
                 system_prompt = f"{combined_weather_data}\nProvide helpful travel advice incorporating the available weather data and general advice for locations where weather data was unavailable."
@@ -480,7 +481,7 @@ class ConversationManager:
             "usage_info": initial_api_result.get("usage")
         }
 
-    def _update_conversation_state(self, user_message: str, assistant_response: str, is_retry_or_edit: bool):
+    def _update_conversation_context(self, user_message: str, assistant_response: str, is_retry_or_edit: bool):
         """Updates and trims conversation history and context manager."""
         if not is_retry_or_edit:
             self.conversation_history.append({"role": "user", "content": user_message})
@@ -557,6 +558,8 @@ class ConversationManager:
                 "valid": False,
                 "error": "Your message is too long. Please keep it under 4000 characters."
             }
+
+        # add other moderations in the future...
 
         return {"valid": True}
 
@@ -719,7 +722,7 @@ class ConversationManager:
         1.  **Deconstruct the Request:** What is the core goal? What are the key entities, constraints (budget, time, etc.), and the desired output?
         2.  **Formulate a Plan of Action:** Outline the structure of your final answer. For an itinerary, how will you group activities? For a problem, what are the comparison criteria?
         3.  **Generate the Response Content:** Based on your plan, gather and structure the information for the final response.
-        4.  **Final Review (Self-Correction):** Briefly review your planned output against the original request to ensure all points are covered.
+        4.  **Final Review (Self-Correction):** Briefly review your planned output against the original request to ensure all points are covered. Make sure the calculations (for prices) are correct, and that everything is logical and makes sense.
     </Chain_of_Thought>
 
     <Hard_Rules>
@@ -728,7 +731,7 @@ class ConversationManager:
         - Even though you are incredibly intelligent, your final result must be helpful for any type of user. you should not be too technical or too detailed or to technical in your final result as the user may not get that like you. Thus the final plan must be readable, easy to understand, logical, helpful and concise.
         - Engaging Presentation: Don't have your plan as only bullet points as it would be too technical and boring. You can combine concise descriptive sentences to create a warm, human touch. Frame responses as if you're personally planning something for the user, not just listing technical details.
         - **Knowledge Limitation:** Real-Time Data Limitation - Clearly state that you cannot access live information. For time-sensitive events, suggest them generally (e.g., "Consider catching a Yankees vs. Red Sox game") instead of providing specific details like times or other things that you cannot verify.
-        - Always include prices, consider budgets when you can. It's helpful to know what is the cost of things you suggest. Similarly consider time, effort, things like that.
+        - Always include prices, consider budgets when you can. It's helpful to know what is the cost of things you suggest. Similarly consider time, effort, things like that. At the end of the plan It's great to have some 'Total Estimated Cost' (best as a nice table) with the costs (including lodging if needed) of the trip - it should be concise and not complicated.
         - Between bullet point, it's very professional if you sometimes involve a nice sentence that is not part of a bullet point. some side note, interesting fact, short explanation, small details, something personal maybe even about you (what you like, or has done in the past..). This is where you charm the user. But watch out - don't do it too much, only once or twice!
     </Hard_Rules>
 </System_Instructions>
@@ -756,11 +759,12 @@ end context.
         if result["success"]:
             full_output = result["content"]
             # For debugging, print the model's full, raw output to the console.
-            #print(f"✅ Reasoning model returned a successful response. Full output:\n{full_output}\n")
+            print(f"✅ Reasoning model returned a successful response. Full output:\n{full_output}\n")
             final_plan = self._parse_final_plan(full_output)
             return {
                 "success": True,
                 "data": final_plan,
+                "full_output" : full_output,
                 "model_used": result.get("model_used")
             }
         else:

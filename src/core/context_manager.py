@@ -104,7 +104,7 @@ class ContextManager:
 The context will be updated after every message. It is important you **do not drastically change the context each time**, but rather just update only what's necessary while trying to avoid changing things that are still valid and relevant.
 
 * **Preserve** information from the CURRENT USER CONTEXT that is still valid.  
-* **Modify** existing details only if the user provides new information that contradicts or refines them (e.g., changing their budget or destination).  
+* **Modify** existing details only if the user provides new information that contradicts or refines them (e.g., changing their budget or destination). You can merge any overlapping details so the information isn't repeated unnecessarily.
 * **Add** new information learned from the RECENT CONVERSATION.  
 * If nothing has changed or needs modification, you must **output the exact same current context.**
 
